@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
@@ -21,34 +22,36 @@ func init() {
 
 //type和isConnect作为私有变量不对外暴露
 type MySQL_D struct {
-	isConnect bool
-	types     string
+	IsConnect bool
+	Types     string
 	Db        *sqlx.DB //可以通过这个直接使用sqlx的封装，因此更加具有灵活性
 }
 
-func (sql MySQL_D) SetType(types string) {
-	sql.types = types
+func SQL_init() *MySQL_D {
+	var db *MySQL_D
+	db = &MySQL_D{}
+	return db
+}
+
+func (sql *MySQL_D) SetType(types string) {
+	sql.Types = types
 }
 
 //Connect使用参数化，更加方便，全局变量在对象中进行封装
-func (sql MySQL_D) Connect(host string, port int64, username string, password string, databse string) (error, bool) {
-	formats := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", username, password, host, port, databse)
-	database, err := sqlx.Open(sql.types, formats)
+func (sql *MySQL_D) Connect(host string, port int64, username string, password string, databse string) (error, bool) {
+	formats := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8&parseTime=True&loc=Local", username, password, host, port, databse)
+	database, err := sqlx.Open("mysql", formats)
 	if err != nil {
 		return err, false
 	}
 	sql.Db = database
-	defer database.Close()
+	sql.IsConnect = true
 	return nil, true
 }
 
-func (sql MySQL_D) IsConnect() bool {
-	return sql.isConnect
-}
-
-func (sql MySQL_D) Insert(table string, key []string, val []string) (error, bool) {
+func (sql *MySQL_D) Insert(table string, key []string, val []string) (error, bool) {
 	//判断数据库是否已连接
-	if !sql.isConnect {
+	if !sql.IsConnect {
 		return errors.New("Is not connect"), false
 	}
 	//判断是键值对是否相同
@@ -66,12 +69,13 @@ func (sql MySQL_D) Insert(table string, key []string, val []string) (error, bool
 	formats += ")values("
 	for _, i := range val {
 		if i != val[len(val)-1] {
-			formats += (i + ", ")
+			formats += ("'" + i + "'" + ", ")
 			continue
 		}
-		formats += i
+		formats += ("'" + i + "'")
 		formats += ")"
 	}
+	fmt.Println(formats)
 	_, err := sql.Db.Exec(formats)
 	if err != nil {
 		return err, false
@@ -79,8 +83,14 @@ func (sql MySQL_D) Insert(table string, key []string, val []string) (error, bool
 	return nil, true
 }
 
-func (sql MySQL_D) Select(dest interface{}, query string, args ...interface{}) error {
+func (sql *MySQL_D) Select(dest interface{}, query string, args ...interface{}) error {
 	return sql.Db.Select(dest, query, args...)
+}
+
+func LogErr(err error) {
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 //直接执行
